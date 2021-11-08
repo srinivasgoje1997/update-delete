@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
+	<flow name="sccsdcFlow" doc:id="a65859a2-8303-4241-b4b0-9678447f00f0" >
+		<scheduler doc:name="Scheduler" doc:id="87f44fbc-7d3f-427d-9946-9c8aed3b7c10" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="1" timeUnit="MINUTES"/>
+			</scheduling-strategy>
+		</scheduler>
+		<scatter-gather doc:name="Scatter-Gather" doc:id="e0d77241-4fad-48b6-94b7-e3c54c6bc624" >
+			<route >
+				<db:select doc:name="Select" doc:id="d7be33fd-4635-4322-92c1-d1cb2a8efcad" config-ref="Database_Config">
+					<db:sql ><![CDATA[Select * from employee]]></db:sql>
+				</db:select>
+				<ee:transform doc:name="Transform Message" doc:id="2d7cd282-a50e-440b-9ffd-b905d32129c2" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+payload map ( payload01 , indexOfPayload01 ) -> {
+	Emp_ID__c: payload01.Emp_ID,
+	Emp_Name__c: payload01.Emp_Name,
+	Emp_Sal__c: payload01.Emp_Sal
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<salesforce:upsert doc:name="Upsert" doc:id="34df5c18-a92d-4355-acb5-8441d3b401c1" objectType="Record__c" externalIdFieldName="Id" config-ref="Salesforce_Config"/>
+			</route>
+			<route >
+				<db:select doc:name="Select" doc:id="f32e4940-5b9c-4713-8c62-0703f23630fe" config-ref="Database_Config">
+					<db:sql ><![CDATA[Select * from emp]]></db:sql>
+				</db:select>
+				<choice doc:name="Choice" doc:id="13684c81-526a-4a11-a537-439dd0bb2a00" >
+					<when expression="#[isEmpty(payload)]">
+						<logger level="INFO" doc:name="Logger" doc:id="7c427b46-68b9-4bb9-8116-a32fe7b1b701" />
+					</when>
+					<otherwise >
+						<ee:transform doc:name="Transform Message" doc:id="3f81470c-b95b-49da-8dd5-06b9a2ca628f" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+						<foreach doc:name="For Each" doc:id="aa8e28c3-151e-4dcc-aa6b-325885a6f276" >
+							<set-variable value="#[payload.Emp_ID]" doc:name="Set Variable" doc:id="a1e43fc0-55df-4272-9c3f-de1309f9b734" variableName="id"/>
+							<salesforce:query doc:name="Query" doc:id="1333dde4-148d-4fbe-b285-cba3fa47efd4" config-ref="Salesforce_Config">
+								<salesforce:salesforce-query><![CDATA[Select Name from Record__c]]></salesforce:salesforce-query>
+								<salesforce:parameters><![CDATA[#[output application/java
+---
+{
+	"emp" : vars.id
+}]]]></salesforce:parameters>
+							</salesforce:query>
+							<logger level="INFO" doc:name="Logger" doc:id="ea6b88fa-5754-40cf-8450-ec9baf87f2ff" message="#[output application/json&#10;---&#10;payload]" />
+							<set-variable value="#[payload.Name]" doc:name="Set Variable" doc:id="b2b6cbf5-97df-47dd-a04e-ce267150d446" variableName="name"/>
+							<salesforce:delete doc:name="Delete" doc:id="212af538-5679-4945-ba76-729292e79724" config-ref="Salesforce_Config">
+								<salesforce:ids ><![CDATA[#[vars.name]]]></salesforce:ids>
+							</salesforce:delete>
+							<db:delete doc:name="Delete" doc:id="9f799ba6-51d2-4a1d-99b1-1e951867b797" config-ref="Database_Config">
+								<db:sql ><![CDATA[DELETE FROM emp WHERE Emp_ID = :ID]]></db:sql>
+								<db:input-parameters ><![CDATA[#[{
+	"ID" : vars.id
+}]]]></db:input-parameters>
+							</db:delete>
+						</foreach>
+					</otherwise>
+				</choice>
+			</route>
+		</scatter-gather>
+		<ee:transform doc:name="Transform Message" doc:id="fe572518-ef7a-4647-96ca-61c2c9760f37" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+</mule>

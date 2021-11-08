@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<types:mule xmlns:types="http://www.mulesoft.org/schema/mule/types">
+  <types:catalog>
+    <types:type name="user" format="json">
+      <types:shape format="weave" example="examples/output.json"><![CDATA[%dw 2.0
+
+type user = Array<{|  empId: Number {"typeId": "int"},   empName: String,   empSal: Number {"typeId": "int"}|}> {"example": "[{\\\"empId\\\":5,\\\"empName\\\":\\\"Dan\\\",\\\"empSal\\\":86},{\\\"empId\\\":99,\\\"empName\\\":\\\"Adena\\\",\\\"empSal\\\":62}]"}
+
+]]></types:shape>
+    </types:type>
+  </types:catalog>
+  <types:enrichment select="#32886361-bce7-4ced-94e7-2bea8132b41d"/>
+</types:mule>
